@@ -1,22 +1,23 @@
 ---
 # Server configuration
 server:
-  listen: 8080
-  workers: 4
-  upstream:
-    - id: node1
-      url: jsonplaceholder.typicode.com
-    - id: node2
-      url: http://localhost:8002
-  headers:
-    - key: x-forward-for
-      value: $ip
-    - key: Authorization
-      value: Bearer xyz
-  rules:
-    - path: /
-      upstrams: [node1, node2]
-    - path: /admin
-      upstrams: [node2]
-    - path: /todos
-      upstrams: [node1]
+    listen: 8080
+    workers: 4
+    upstream:
+        - id: jsonplaceholder
+          url: jsonplaceholder.typicode.com
+
+        - id: dummyjson
+          url: dummyjson.com
+
+    headers:
+        - key: x-forward-for
+          value: $ip
+        - key: Authorization
+          value: Bearer xyz
+    rules:
+        - path: /test
+          upstrams: [dummyjson]
+
+        - path: /
+          upstrams: [jsonplaceholder]

@@ -40,7 +40,14 @@ export async function createServer(config: ServerConfig) {
                     url: req.url as string,
                }
 
+               worker.removeAllListeners("message")
+               worker.removeAllListeners("error")
+
                worker.send(JSON.stringify(payload))
+
+               process.on("uncaughtException", err => {
+                    console.error("Unhandled error in worker:", err)
+               })
 
                worker.on("message", async (workerReply: string) => {
                     const reply = await workerMessageReplySchema.parseAsync(
@@ -49,13 +56,15 @@ export async function createServer(config: ServerConfig) {
                     if (reply.errorCode) {
                          res.writeHead(parseInt(reply.errorCode))
                          res.end(reply.error)
-                         return
                     } else {
                          res.writeHead(200)
                          res.end(reply.data)
-                         return
                     }
                })
+
+               worker.on("error", message =>
+                    console.log("error occured in worker", message)
+               )
           })
 
           server.listen(config.port, () => {
@@ -74,7 +83,10 @@ export async function createServer(config: ServerConfig) {
                )
 
                const requestURL = validatedMessage.url
-               const rule = config.server.rules.find(e => e.path === requestURL)
+               const rule = config.server.rules.find(e => {
+                    const regex = new RegExp(`^${e.path}.*$`)
+                    return regex.test(requestURL)
+               })
 
                if (!rule) {
                     const reply: WorkerMessageReplyType = {
@@ -97,7 +109,7 @@ export async function createServer(config: ServerConfig) {
                     if (process.send) return process.send(JSON.stringify(reply))
                }
 
-               http.request(
+               const request = http.request(
                     { host: upstream?.url, path: requestURL },
                     proxyRes => {
                          let body = ""
@@ -115,6 +127,16 @@ export async function createServer(config: ServerConfig) {
                          })
                     }
                )
+
+               request.on("error", err => {
+                    console.error("Error with proxy request:", err)
+                    const reply: WorkerMessageReplyType = {
+                         errorCode: "502",
+                         error: "Bad Gateway",
+                    }
+                    if (process.send) process.send(JSON.stringify(reply))
+               })
+               request.end()
           })
      }
 }
